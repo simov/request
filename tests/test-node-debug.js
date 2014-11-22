@@ -23,6 +23,7 @@ tape('setup', function(t) {
 })
 
 tape('a simple request should not fail with debugging enabled', function(t) {
+  stderr = []
   request.debug = true
 
   request('http://localhost:6767', function(err, res, body) {
