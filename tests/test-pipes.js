@@ -280,7 +280,9 @@ tape('cleanup', function(t) {
     t.end()
     setTimeout(function() {
       /*eslint no-process-exit:0*/
-      process.exit(0)
+      if (!process.env.running_under_istanbul) {
+        process.exit(0)
+      }
     }, 10)
   }, 300)
 })
