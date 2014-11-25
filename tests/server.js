@@ -82,14 +82,13 @@ exports.createPostJSONValidator = function (value, reqContentType) {
     var r = ''
     req.on('data', function (chunk) {r += chunk})
     req.on('end', function () {
-      var parsedValue = JSON.parse(r)
-      assert.deepEqual(parsedValue, value)
+      assert.equal(r, JSON.stringify(value))
       if (reqContentType) {
         assert.ok(req.headers['content-type'])
         assert.ok(~req.headers['content-type'].indexOf(reqContentType))
       }
       resp.writeHead(200, {'content-type':'application/json'})
-      resp.write(JSON.stringify({ status: 'OK', value: parsedValue }))
+      resp.write(r)
       resp.end()
     })
   }
