@@ -1635,11 +1635,11 @@ Request.prototype.hawk = function (opts) {
 
 Request.prototype.oauth = function (_oauth) {
   var self = this
-  var form, query, contentType = ''
-  var formContentType = 'application/x-www-form-urlencoded'
+  var form, query
   if (self.hasHeader('content-type') &&
-      self.getHeader('content-type').slice(0, formContentType.length) === formContentType) {
-    contentType = formContentType
+      self.getHeader('content-type').slice(0, 'application/x-www-form-urlencoded'.length) ===
+        'application/x-www-form-urlencoded'
+      ) {
     form = self.body
   }
   if (self.uri.query) {
@@ -1647,22 +1647,7 @@ Request.prototype.oauth = function (_oauth) {
   }
 
   var transport = _oauth.transport_method || 'header'
-  if (typeof transport !== 'string' ||
-      (transport !== 'header' &&
-      transport !== 'body' &&
-      transport !== 'query')) {
-
-    throw new Error('oauth.transport_method invalid')
-  }
-
-  if (transport === 'body' && (
-      self.method !== 'POST' || contentType !== formContentType)) {
-
-    throw new Error('Illegal combination of oauth.transport_method and http ' +
-        'method or content-type. transport_method \'body\' can only be used ' +
-        'when http method is \'POST\' and content-type is \'' + formContentType + '\'')
-  }
-
+  if (!/header|body|query/.test(transport)) transport = 'header'
   delete _oauth.transport_method
 
   var oa = {}
@@ -1710,17 +1695,15 @@ Request.prototype.oauth = function (_oauth) {
     self.setHeader('Authorization', authHeader)
   }
   else {
-
-    oa.oauth_signature = signature
-    var joinedOauthParameters = Object.keys(oa).sort().map(function (i) {
+    var querystring = Object.keys(oa).sort().map(function (i) {
       return i + '=' + oauth.rfc3986(oa[i])
     }).join('&')
-    delete oa.oauth_signature
+    querystring += '&' + oauth.rfc3986(signature)
 
     if (transport === 'query') {
-      self.path += (query ? '&' : '?') + joinedOauthParameters
+      self.path += (query ? '&' : '?') + querystring
     } else if (transport === 'body') {
-      self.body = (self.body ? self.body + '&' : '') + joinedOauthParameters
+      self.body = (form ? form + '&' : '') + querystring
     }
   }
 
