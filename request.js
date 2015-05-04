@@ -246,6 +246,7 @@ function Request (options) {
 
   var self = this
 
+  Request.upstream.emit('init')
   // start with HAR, then override with additional options
   if (options.har) {
     self._har = new Har(self)
@@ -258,6 +259,7 @@ function Request (options) {
 
   stream.Stream.call(self)
   util._extend(self, nonReserved)
+  util._extend(self._events, Request.upstream._events)
   options = filterOutReservedFunctions(reserved, options)
 
   self.readable = true
@@ -270,6 +272,7 @@ function Request (options) {
   self._multipart = new Multipart(self)
   self._redirect = new Redirect(self)
   self.init(options)
+  self.emit('initialized')
 }
 
 util.inherits(Request, stream.Stream)
