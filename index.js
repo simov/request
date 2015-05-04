@@ -17,6 +17,7 @@
 var extend                = require('util')._extend
   , cookies               = require('./lib/cookies')
   , helpers               = require('./lib/helpers')
+  , events                = require('events')
 
 var isFunction            = helpers.isFunction
   , paramsHaveRequestBody = helpers.paramsHaveRequestBody
@@ -138,7 +139,10 @@ request.forever = function (agentOptions, optionsArg) {
 // Exports
 
 module.exports = request
+extend(request, events.prototype)
+events.call(request)
 request.Request = require('./request')
+request.Request.upstream = request
 request.initParams = initParams
 
 // Backwards compatibility for request.debug
