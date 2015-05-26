@@ -42,7 +42,9 @@
     "har-validator": "^1.6.1"
   },
   "scripts": {
-    "test": "npm run lint && node node_modules/.bin/taper tests/test-*.js && npm run test-browser",
+    "test": "npm run lint && npm run test-taper && npm run test-browser",
+    "test-taper": "node node_modules/.bin/taper tests/test-*.js",
+    "test-cov": "node node_modules/.bin/istanbul cover ./node_modules/tape/bin/tape tests/test-*.js --report lcovonly",
     "test-browser": "node tests/browser/start.js",
     "lint": "node node_modules/.bin/eslint lib/ *.js tests/ && echo Lint passed."
   },
