@@ -6,6 +6,8 @@ var oauth = require('oauth-sign')
   , path = require('path')
   , request = require('../index')
   , tape = require('tape')
+  , crypto = require('crypto')
+  , http = require('http')
 
 function getSignature(r) {
   var sign
@@ -325,16 +327,6 @@ tape('invalid transport_method', function(t) {
       request.post(
       { url: 'http://example.com/'
       , oauth:
-        { transport_method: 'some random string'
-        }
-      })
-    }, /transport_method invalid/)
-
-  t.throws(
-    function () {
-      request.post(
-      { url: 'http://example.com/'
-      , oauth:
         { transport_method: 'headerquery'
         }
       })
@@ -352,7 +344,7 @@ tape('invalid method while using transport_method \'body\'', function(t) {
         { transport_method: 'body'
         }
       })
-    }, /requires 'POST'/)
+    }, /requires POST/)
   t.end()
 })
 
@@ -366,11 +358,11 @@ tape('invalid content-type while using transport_method \'body\'', function(t) {
         { transport_method: 'body'
         }
       })
-    }, /requires 'POST'/)
+    }, /requires POST/)
   t.end()
 })
 
-tape('query transport_method simple url', function(t) {
+tape('query transport_method', function(t) {
   var r = request.post(
     { url: 'https://api.twitter.com/oauth/access_token'
     , oauth:
@@ -389,14 +381,23 @@ tape('query transport_method simple url', function(t) {
 
   process.nextTick(function() {
     t.notOk(r.headers.Authorization, 'oauth Authorization header should not be present with transport_method \'query\'')
-    t.equal(accsign, qs.parse(r.path).oauth_signature)
-    t.notOk(r.path.match(/\?&/), 'there should be no ampersand at the beginning of the query')
+    t.equal(r.uri.path, r.path, 'r.uri.path should equal r.path')
+    t.ok(r.path.match(/^\/oauth\/access_token\?/), 'path should contain path + query')
+    t.deepEqual(qs.parse(r.uri.query),
+      { oauth_consumer_key: 'GDdmIQH6jhtmLUypg82g',
+        oauth_nonce: '9zWH6qe0qG7Lc1telCn7FhUbLyVdjEaL3MO5uHxn8',
+        oauth_signature_method: 'HMAC-SHA1',
+        oauth_timestamp: '1272323047',
+        oauth_token: '8ldIZyxQeVrFZXFOZH5tAwj6vzJYuLQpl0WUEYtWc',
+        oauth_verifier: 'pDNg57prOHapMbhv25RNf75lVRd6JDsni1AJJIDYoTY',
+        oauth_version: '1.0',
+        oauth_signature: accsign })
     r.abort()
     t.end()
   })
 })
 
-tape('query transport_method with prexisting url params', function(t) {
+tape('query transport_method + form option + url params', function(t) {
   var r = request.post(
     { url: 'http://example.com/request?b5=%3D%253D&a3=a&c%40=&a2=r%20b'
     , oauth:
@@ -418,14 +419,26 @@ tape('query transport_method with prexisting url params', function(t) {
 
   process.nextTick(function() {
     t.notOk(r.headers.Authorization, 'oauth Authorization header should not be present with transport_method \'query\'')
-    t.notOk(r.path.match(/\?&/), 'there should be no ampersand at the beginning of the query')
-    t.equal('OB33pYjWAnf+xtOHN4Gmbdil168=', qs.parse(r.path).oauth_signature)
+    t.equal(r.uri.path, r.path, 'r.uri.path should equal r.path')
+    t.ok(r.path.match(/^\/request\?/), 'path should contain path + query')
+    t.deepEqual(qs.parse(r.uri.query),
+      { b5: '=%3D',
+        a3: 'a',
+        'c@': '',
+        a2: 'r b',
+        realm: 'Example',
+        oauth_nonce: '7d8f3e4a',
+        oauth_signature_method: 'HMAC-SHA1',
+        oauth_timestamp: '137131201',
+        oauth_token: 'kkk9d7dh3k39sjv7',
+        oauth_version: '1.0',
+        oauth_signature: 'OB33pYjWAnf+xtOHN4Gmbdil168=' })
     r.abort()
     t.end()
   })
 })
 
-tape('query transport_method with qs parameter and existing query string in url', function(t) {
+tape('query transport_method + qs option + url params', function(t) {
   var r = request.post(
     { url: 'http://example.com/request?a2=r%20b'
     , oauth:
@@ -449,30 +462,28 @@ tape('query transport_method with qs parameter and existing query string in url'
 
   process.nextTick(function() {
     t.notOk(r.headers.Authorization, 'oauth Authorization header should not be present with transport_method \'query\'')
-    t.notOk(r.path.match(/\?&/), 'there should be no ampersand at the beginning of the query')
-    t.equal('OB33pYjWAnf+xtOHN4Gmbdil168=', qs.parse(r.path).oauth_signature)
-
-    var params = qs.parse(r.path.split('?')[1])
-      , keys = Object.keys(params)
-
-    var paramNames = [
-      'a2', 'b5', 'a3[0]', 'a3[1]', 'c@', 'c2',
-      'realm', 'oauth_nonce', 'oauth_signature_method', 'oauth_timestamp',
-      'oauth_token', 'oauth_version', 'oauth_signature'
-    ]
-
-    for (var i = 0; i < keys.length; i++) {
-      t.ok(keys[i] === paramNames[i],
-        'Non-oauth query params should be first, ' +
-        'OAuth query params should be second in query string')
-    }
-
+    t.equal(r.uri.path, r.path, 'r.uri.path should equal r.path')
+    t.ok(r.path.match(/^\/request\?/), 'path should contain path + query')
+    t.deepEqual(qs.parse(r.uri.query),
+      { a2: 'r b',
+        b5: '=%3D',
+        'a3[0]': 'a',
+        'a3[1]': '2 q',
+        'c@': '',
+        c2: '',
+        realm: 'Example',
+        oauth_nonce: '7d8f3e4a',
+        oauth_signature_method: 'HMAC-SHA1',
+        oauth_timestamp: '137131201',
+        oauth_token: 'kkk9d7dh3k39sjv7',
+        oauth_version: '1.0',
+        oauth_signature: 'OB33pYjWAnf+xtOHN4Gmbdil168=' })
     r.abort()
     t.end()
   })
 })
 
-tape('body transport_method empty body', function(t) {
+tape('body transport_method', function(t) {
   var r = request.post(
     { url: 'https://api.twitter.com/oauth/access_token'
     , headers: { 'content-type': 'application/x-www-form-urlencoded; charset=UTF-8' }
@@ -492,14 +503,21 @@ tape('body transport_method empty body', function(t) {
 
   process.nextTick(function() {
     t.notOk(r.headers.Authorization, 'oauth Authorization header should not be present with transport_method \'body\'')
-    t.equal(accsign, qs.parse(r.body.toString()).oauth_signature)
-    t.notOk(r.body.toString().match(/^&/), 'there should be no ampersand at the beginning of the body')
+    t.deepEqual(qs.parse(r.body),
+      { oauth_consumer_key: 'GDdmIQH6jhtmLUypg82g',
+        oauth_nonce: '9zWH6qe0qG7Lc1telCn7FhUbLyVdjEaL3MO5uHxn8',
+        oauth_signature_method: 'HMAC-SHA1',
+        oauth_timestamp: '1272323047',
+        oauth_token: '8ldIZyxQeVrFZXFOZH5tAwj6vzJYuLQpl0WUEYtWc',
+        oauth_verifier: 'pDNg57prOHapMbhv25RNf75lVRd6JDsni1AJJIDYoTY',
+        oauth_version: '1.0',
+        oauth_signature: accsign })
     r.abort()
     t.end()
   })
 })
 
-tape('body transport_method with prexisting body params', function(t) {
+tape('body transport_method + form option + url params', function(t) {
   var r = request.post(
     { url: 'http://example.com/request?b5=%3D%253D&a3=a&c%40=&a2=r%20b'
     , oauth:
@@ -521,9 +539,140 @@ tape('body transport_method with prexisting body params', function(t) {
 
   process.nextTick(function() {
     t.notOk(r.headers.Authorization, 'oauth Authorization header should not be present with transport_method \'body\'')
-    t.notOk(r.body.toString().match(/^&/), 'there should be no ampersand at the beginning of the body')
-    t.equal('OB33pYjWAnf+xtOHN4Gmbdil168=', qs.parse(r.body.toString()).oauth_signature)
+    t.deepEqual(qs.parse(r.body),
+      { c2: '',
+        a3: '2 q',
+        realm: 'Example',
+        oauth_nonce: '7d8f3e4a',
+        oauth_signature_method: 'HMAC-SHA1',
+        oauth_timestamp: '137131201',
+        oauth_token: 'kkk9d7dh3k39sjv7',
+        oauth_version: '1.0',
+        oauth_signature: 'OB33pYjWAnf+xtOHN4Gmbdil168=' })
     r.abort()
     t.end()
+  })
+})
+
+tape('body_hash manual built', function(t) {
+  function buildBodyHash (body) {
+    var shasum = crypto.createHash('sha1')
+    shasum.update(body || '')
+    var sha1 = shasum.digest('hex')
+    return new Buffer(sha1).toString('base64')
+  }
+
+  var json = {foo: 'bar'}
+  var r = request.post(
+    { url: 'http://example.com'
+    , oauth:
+      { consumer_secret: 'consumer_secret'
+      , body_hash: buildBodyHash(JSON.stringify(json))
+      }
+    , json: json
+    })
+
+  process.nextTick(function() {
+    var body_hash = r.headers.Authorization.replace(/.*oauth_body_hash="([^"]+)".*/, '$1')
+    t.equal('YTVlNzQ0ZDAxNjQ1NDBkMzNiMWQ3ZWE2MTZjMjhmMmZhOTdlNzU0YQ%3D%3D', body_hash)
+    r.abort()
+    t.end()
+  })
+})
+
+tape('body_hash automatic built', function(t) {
+  var r = request.post(
+    { url: 'http://example.com'
+    , oauth:
+      { consumer_secret: 'consumer_secret'
+      , body_hash: true
+      }
+    , json: {foo: 'bar'}
+    })
+
+  process.nextTick(function() {
+    var body_hash = r.headers.Authorization.replace(/.*oauth_body_hash="([^"]+)".*/, '$1')
+    t.equal('YTVlNzQ0ZDAxNjQ1NDBkMzNiMWQ3ZWE2MTZjMjhmMmZhOTdlNzU0YQ%3D%3D', body_hash)
+    r.abort()
+    t.end()
+  })
+})
+
+tape('body_hash PLAINTEXT signature_method', function(t) {
+  t.throws(function() {
+    request.post(
+    { url: 'http://example.com'
+    , oauth:
+      { consumer_secret: 'consumer_secret'
+      , body_hash: true
+      , signature_method: 'PLAINTEXT'
+      }
+    , json: {foo: 'bar'}
+    })
+  }, /oauth: PLAINTEXT signature_method not supported with body_hash signing/)
+  t.end()
+})
+
+tape('refresh oauth_nonce on redirect', function(t) {
+  var oauth_nonce1, oauth_nonce2
+  var s = http.createServer(function (req, res) {
+    if (req.url === '/redirect') {
+      oauth_nonce1 = req.headers.authorization.replace(/.*oauth_nonce="([^"]+)".*/, '$1')
+      res.writeHead(302, {location:'http://localhost:6767/response'})
+      res.end()
+    } else if (req.url === '/response') {
+      oauth_nonce2 = req.headers.authorization.replace(/.*oauth_nonce="([^"]+)".*/, '$1')
+      res.writeHead(200, {'content-type':'text/plain'})
+      res.end()
+    }
+  })
+  s.listen(6767, function () {
+    request.get(
+      { url: 'http://localhost:6767/redirect'
+      , oauth:
+        { consumer_key: 'consumer_key'
+        , consumer_secret: 'consumer_secret'
+        , token: 'token'
+        , token_secret: 'token_secret'
+        }
+      }, function (err, res, body) {
+        t.equal(err, null)
+        t.notEqual(oauth_nonce1, oauth_nonce2)
+        s.close(function () {
+          t.end()
+        })
+      })
+  })
+})
+
+tape('no credentials on external redirect', function(t) {
+  var s1 = http.createServer(function (req, res) {
+    res.writeHead(302, {location:'http://127.0.0.1:6768'})
+    res.end()
+  })
+  var s2 = http.createServer(function (req, res) {
+    res.writeHead(200, {'content-type':'text/plain'})
+    res.end()
+  })
+  s1.listen(6767, function () {
+    s2.listen(6768, function () {
+      request.get(
+        { url: 'http://localhost:6767'
+        , oauth:
+          { consumer_key: 'consumer_key'
+          , consumer_secret: 'consumer_secret'
+          , token: 'token'
+          , token_secret: 'token_secret'
+          }
+        }, function (err, res, body) {
+          t.equal(err, null)
+          t.equal(res.request.headers.Authorization, undefined)
+          s1.close(function () {
+            s2.close(function () {
+              t.end()
+            })
+          })
+        })
+    })
   })
 })
