@@ -387,12 +387,16 @@ Request.prototype.init = function (options) {
     if (Object.prototype.hasOwnProperty.call(options.auth, 'password')) {
       options.auth.pass = options.auth.password
     }
+    if (Object.prototype.hasOwnProperty.call(options.auth, 'negotiate')) {
+      options.auth.negotiate = options.auth.negotiate
+    }
 
     self.auth(
       options.auth.user,
       options.auth.pass,
       options.auth.sendImmediately,
-      options.auth.bearer
+      options.auth.bearer,
+      options.auth.negotiate
     )
   }
 
@@ -539,6 +543,10 @@ Request.prototype.init = function (options) {
     }
 
     var end = function () {
+      if (self._auth.pendingAuth) {
+        self.once('authReady', end)
+        return
+      }
       if (self._form) {
         if (!self._auth.hasAuth) {
           self._form.pipe(self)
@@ -1214,10 +1222,10 @@ Request.prototype.enableUnixSocket = function () {
 }
 
 
-Request.prototype.auth = function (user, pass, sendImmediately, bearer) {
+Request.prototype.auth = function (user, pass, sendImmediately, bearer, negotiate) {
   var self = this
 
-  self._auth.onRequest(user, pass, sendImmediately, bearer)
+  self._auth.onRequest(user, pass, sendImmediately, bearer, negotiate)
 
   return self
 }
