@@ -52,6 +52,15 @@ tape('sendImmediately false', function (t) {
   })
 })
 
+tape('non registered host', function (t) {
+  request.get('http://something.com', {
+    auth: {negotiate: true, sendImmediately: true}
+  }, function (err, res, body) {
+    t.equal(/Server .* not found in Kerberos database/.test(err.message), true, 'err')
+    t.end()
+  })
+})
+
 tape('cleanup', function (t) {
   server.close(t.end.bind())
 })
