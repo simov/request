@@ -4,44 +4,54 @@ var http = require('http')
 var kerberos = require('kerberos')
 var request = require('../')
 var tape = require('tape')
-var server = http.createServer()
-var k = new kerberos.Kerberos()
-var context = null
 
+var k = new kerberos.Kerberos()
+var server = http.createServer()
 
 tape('setup', function (t) {
-  server.listen(3000, function () {
-    k.authGSSServerInit('HTTP@localhost', function (err, _context) {
-      t.equal(err, null)
-      context = _context
-      t.end()
-    })
+  server.listen(6767, t.end.bind())
+  server.on('request', function (req, res) {
+    if (!req.headers.authorization) {
+      res.writeHead(401, {'WWW-Authenticate': 'Negotiate something'})
+      res.end()
+    }
+    else {
+      var host = req.headers.host.replace(/:\d+/, '')
+      k.authGSSServerInit('HTTP@' + host, function (err, context) {
+        t.equal(err, null, 'err')
+        var authData = req.headers.authorization.replace('Negotiate ', '')
+        k.authGSSServerStep(context, authData, function (err) {
+          t.equal(err, null, 'err')
+          k.authGSSServerClean(context, function (err) {
+            t.equal(err, null, 'err')
+            res.end('success')
+          })
+        })
+      })
+    }
   })
 })
 
-tape('kerberos', function (t) {
-  server.on('request', function (req, res) {
-    var authData = req.headers.authorization.replace('Negotiate ', '')
-    k.authGSSServerStep(context, authData, function (err) {
-      if (err) console.log(err)
-      res.end('success')
-    })
-  })
-
-  request.get('http://localhost:3000', {
-    auth: {negotiate: true}
+tape('sendImmediately true', function (t) {
+  request.get('http://localhost:6767', {
+    auth: {negotiate: true, sendImmediately: true}
   }, function (err, res, body) {
-    t.equal(err, null)
-    t.equal(body, 'success')
+    t.equal(err, null, 'err')
+    t.equal(body, 'success', 'body')
+    t.end()
+  })
+})
+
+tape('sendImmediately false', function (t) {
+  request.get('http://localhost:6767', {
+    auth: {negotiate: true, sendImmediately: false}
+  }, function (err, res, body) {
+    t.equal(err, null, 'err')
+    t.equal(body, 'success', 'body')
     t.end()
   })
 })
 
 tape('cleanup', function (t) {
-  k.authGSSServerClean(context, function (err) {
-    t.equal(err, null)
-    server.close(function () {
-      t.end()
-    })
-  })
+  server.close(t.end.bind())
 })
